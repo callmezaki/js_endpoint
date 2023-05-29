@@ -1,97 +1,135 @@
+import express from "express";
+import body_parser from "express";
+import { PrismaClient } from "@prisma/client";
 
-import  express  from "express"
-import  body_parser  from "express"
-import { PrismaClient } from '@prisma/client';
-
-const app = express()
-const port = 8080
+const app = express();
+const port = 8080;
 
 const prisma = new PrismaClient();
 
-
-app.use(express.json())
+app.use(express.json());
 var _users = [
-    { name: 'tobi' , age: 25}
-    , { name: 'loki', age: 13 }
-    , { name: 'zack', age: 19 }
+  { name: "tobi", email: "tobi@gmail.com" },
+  { name: "loki", email: "loki@gmail.com" },
+  { name: "zack", email: "zack@gmail.com" },
 ];
 
-_users.forEach( async (item) => {
-    const _name = item.name
-   const _use = await prisma.users.findUnique({
-    where:{
-        name : _name
-    }
-   })
-   if (!_use){
-    await prisma.users.create({data: {
+_users.forEach(async (item) => {
+  const _email = item.email;
+  const _user = await prisma.user.findUnique({
+    where: {
+      email: _email,
+    },
+  });
+  if (!_user) {
+    await prisma.user.create({
+      data: {
+        email: item.email,
         name: item.name,
-        age:item.age
-    }})
-   }
-})
-
-app.get('/users', (req, res) => {
-    var qq = req.query['name'];
-    var user = users.find((user) => user.name === qq);
-    
-    if (user) {
-        res.send(user);
-    } else {
-        if (!qq)
-        res.send('enter a valid query');
-        else
-        res.send('u r not in the database');
-    }
+      },
+    });
+  }
 });
 
-app.post('/add', async (req, res) => {
-    
-    const data = await req.body;
-    const {name , age} = data;
+app.post("/add", async (req, res) => {
+  const data = await req.body;
+  const { name, email } = data;
 
-    if ( name && age)
-    {
-        let newUser = {name: name, age: age};
-        if ( await prisma.users.findUnique({
-            where:{
-                name : newUser.name
-            }}))
-            res.send("user exist")
-        else
-        {
-            await prisma.users.create({data: {
-                name: newUser.name,
-                age:newUser.age
-            }});
-            console.log("creted")
-            res.send(`Received name: ${name}, age: ${age}`);
-        }
+  if (name && email) {
+    let newUser = { name: name, email: email };
+    if (
+      await prisma.user.findUnique({
+        where: {
+          email: newUser.email,
+        },
+      })
+    )
+      res.send("user exist");
+    else {
+      await prisma.user.create({
+        data: {
+          email: newUser.email,
+          name: newUser.name,
+        },
+      });
+      console.log("creted");
+      res.send(`Received name: ${name}, email: ${email}`);
     }
-    else
-    res.send("invalid input");
+  } else res.send("invalid input");
 });
 
-app.patch("/users", async (req , res) => {
-    const data = await req.body
-    const {name , newname} = data;
-    var user = users.find((user) => user.name === name);
-    
-    if(user ,user !== undefined ,name, newname)
-    {
-        users.find((user) => {user.name === name ? user.name = newname : ''})
-        res.send(user) 
-    }
-    else
-    res.send('not updated')
-})
+app.patch("/users", async (req, res) => {
+  const data = await req.body;
+  const { email, newemail } = data;
+  const e = prisma.user.findUnique({ where: { email } });
+  const e1 = prisma.user.findUnique({ where: { email: newemail } });
+
+  if (e && !e) {
+    await prisma.user.update({
+      where: {
+        email,
+      },
+      data: {
+        email: newemail,
+      },
+    });
+    res.send("updated");
+  } else if (e && e1) {
+    res.send("new email already exist");
+  } else res.send("other error");
+});
+
+app.delete("/users", async (req, res) => {
+  const _email = await req.body.email;
+
+  if (
+    _email &&
+    (await prisma.user.findUnique({
+      where: {
+        email: _email,
+      },
+    }))
+  ) {
+    await prisma.user.delete({
+      where: {
+        email: _email,
+      },
+    });
+    res.send("deleted");
+  } else res.send("not deleted");
+});
+
+app.post("/todo", async (req, res) => {
+  const id  = req.body.id;
+  const todo = await prisma.todo.update({
+    where:{ id },
+    data:{done: true}
+  })
+  res.send(todo)
+});
+
+app.get("/todo", async (req, res) => {
+  const email = req.query.email;
+  const _user = await prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+  if (_user) {
+    const todos = await prisma.Todo.findMany({
+      where: {
+        userId: _user.id,
+      },
+    });
+    res.send(todos);
+  } else res.send("invalid user");
+});
 
 app.get("/all", async (req, res) => {
-
-    const users = await prisma.users.findMany()
-    res.send(users)
-})
+  const users = await prisma.user.findMany();
+  res.send(users);
+});
 
 app.listen(port, () => {
-    console.log(`app listening on port ${port}`)
-})
+  console.log(`app listening on port ${port}`);
+});
