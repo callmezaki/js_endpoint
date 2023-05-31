@@ -1,17 +1,23 @@
 import express from "express";
 import body_parser from "express";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import authenticateToken from "./middleware/auth.js";
+import swaggerConfig from './swagger.js';
+import authentication from "./routes/authentication.js";
 
 const app = express();
 const port = 8080;
 
 const prisma = new PrismaClient();
 
+swaggerConfig(app);
+app.use(authentication)
+
 app.use(express.json());
 var _users = [
-  { name: "tobi", email: "tobi@gmail.com" },
-  { name: "loki", email: "loki@gmail.com" },
-  { name: "zack", email: "zack@gmail.com" },
+  { name: "zack", email: "zack@gmail.com", password: "zack" },
 ];
 
 _users.forEach(async (item) => {
@@ -21,44 +27,19 @@ _users.forEach(async (item) => {
       email: _email,
     },
   });
+
   if (!_user) {
     await prisma.user.create({
       data: {
         email: item.email,
         name: item.name,
+        password: await bcrypt.hash(item.password, 10),
       },
     });
   }
 });
 
-app.post("/add", async (req, res) => {
-  const data = await req.body;
-  const { name, email } = data;
-
-  if (name && email) {
-    let newUser = { name: name, email: email };
-    if (
-      await prisma.user.findUnique({
-        where: {
-          email: newUser.email,
-        },
-      })
-    )
-      res.send("user exist");
-    else {
-      await prisma.user.create({
-        data: {
-          email: newUser.email,
-          name: newUser.name,
-        },
-      });
-      console.log("creted");
-      res.send(`Received name: ${name}, email: ${email}`);
-    }
-  } else res.send("invalid input");
-});
-
-app.patch("/users", async (req, res) => {
+app.patch("/users", authenticateToken, async (req, res) => {
   const data = await req.body;
   const { email, newemail } = data;
   const e = prisma.user.findUnique({ where: { email } });
@@ -79,56 +60,122 @@ app.patch("/users", async (req, res) => {
   } else res.send("other error");
 });
 
-app.delete("/users", async (req, res) => {
-  const _email = await req.body.email;
-
-  if (
-    _email &&
-    (await prisma.user.findUnique({
-      where: {
-        email: _email,
-      },
-    }))
-  ) {
-    await prisma.user.delete({
-      where: {
-        email: _email,
-      },
-    });
-    res.send("deleted");
-  } else res.send("not deleted");
-});
-
-app.post("/todo", async (req, res) => {
-  const id  = req.body.id;
-  const todo = await prisma.todo.update({
-    where:{ id },
-    data:{done: true}
-  })
-  res.send(todo)
-});
-
-app.get("/todo", async (req, res) => {
-  const email = req.query.email;
-  const _user = await prisma.user.findUnique({
+app.delete("/users", authenticateToken, async (req, res) => {
+  await prisma.user.delete({
     where: {
-      email,
+      id: req.user.id,
     },
   });
-  if (_user) {
-    const todos = await prisma.Todo.findMany({
-      where: {
-        userId: _user.id,
-      },
-    });
-    res.send(todos);
-  } else res.send("invalid user");
+  res.send("deleted");
 });
 
-app.get("/all", async (req, res) => {
-  const users = await prisma.user.findMany();
-  res.send(users);
+
+/**
+ * @swagger
+ * /todo:
+ *   put:
+ *     summary: Update a todo
+ *     description: Updates the status of a todo item to mark it as done.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: query
+ *         description: The ID of the todo item.
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Successful operation
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: No token
+ *       500:
+ *         description: An unexpected error occurred
+ */
+app.put("/todo", authenticateToken, async (req, res) => {
+
+    const id = req.query.id === '' && parseInt(req.query.id)
+
+    if (id) {
+      const todo = await prisma.todo.update({
+        where: { id: id },
+        data: { done: true },
+      });
+
+      res.send(todo);
+    } else {
+      res.send("Invalid task id");
+    }
 });
+
+
+/** 
+* @swagger
+ * /todo:
+ *   post:
+ *     summary: Create a new todo
+ *     description: Creates a new todo for the authenticated user.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: task
+ *         in: body
+ *         description: The task description for the todo.
+ *         required: true
+ *         schema:
+ *           type: object
+ *           properties:
+ *             task:
+ *               type: string
+ *     responses:
+ *       200:
+ *         description: Successful operation
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: An unexpected error occurred
+ */
+app.post("/todo", authenticateToken, async (req, res) => {
+  const task = await req.body.task;
+
+  const todo = await prisma.todo.create({
+    data: {
+      userId: req.user.id,
+      task: task,
+    },
+  });
+  res.send(todo);
+});
+
+/**
+ * @swagger
+ * /todo:
+ *   get:
+ *     summary: Get user's todos
+ *     description: Retrieves the todos associated with the authenticated user.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successful operation
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: An unexpected error occurred
+ */
+
+app.get("/todo", authenticateToken, async (req, res) => {
+  const todos = await prisma.Todo.findMany({
+    where: {
+      userId: req.user.id,
+    },
+  });
+  res.send(todos);
+});
+
 
 app.listen(port, () => {
   console.log(`app listening on port ${port}`);

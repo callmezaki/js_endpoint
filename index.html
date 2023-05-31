@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Todo App</title>
+    <style>
+      .container {
+        max-width: 500px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .form-group {
+        margin-bottom: 10px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      .form-group input {
+        width: 100%;
+        padding: 5px;
+        font-size: 16px;
+      }
+
+      .button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #333;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Todo App</h2>
+
+      <div id="register-form">
+        <h3>Register</h3>
+        <div class="form-group">
+          <label for="name">Name</label>
+          <input type="text" id="name" placeholder="Enter your name" />
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="Enter your email" />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" />
+        </div>
+        <button class="button" onclick="register()">Register</button>
+      </div>
+
+      <div id="login-form">
+        <h3>Login</h3>
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="Enter your email" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Enter your password" />
+        </div>
+        <button class="button" onclick="login()">Login</button>
+      </div>
+
+      <div id="todos" style="display: none;">
+        <h3>My Todos</h3>
+        <ul id="todos-list"></ul>
+      </div>
+    </div>
+
+    <script>
+      const apiUrl = "http://localhost:8080"; // Replace with your backend URL
+
+      async function register() {
+        const name = document.getElementById("name").value;
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+
+        const response = await fetch(`${apiUrl}/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name, email, password }),
+        });
+
+        if (response.ok) {
+          document.getElementById("register-form").style.display = "none";
+          document.getElementById("login-form").style.display = "block";
+        } else {
+          alert("Registration failed. Please try again.");
+        }
+      }
+
+      async function login() {
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+        
+        const response = await fetch(`${apiUrl}/login`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                
+            },
+            body: JSON.stringify({ email, password }),
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+          const token = data.token;
+          localStorage.setItem("token", token);
+          showTodos();
+        } else {
+          alert("Login failed. Please check your credentials.");
+        }
+      }
+
+      async function showTodos() {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          alert("You need to login first.");
+          return;
+        }
+
+        const response = await fetch(`${apiUrl}/todo`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const todos = await response.json();
+          const todosList = document.getElementById("todos-list");
+          todosList.innerHTML = "";
+
+          todos.forEach((todo) => {
+            const todoItem = document.createElement("li");
+            todoItem.textContent = todo.task;
+            todosList.appendChild(todoItem);
+          });
+
+          document.getElementById("register-form").style.display = "none";
+          document.getElementById("login-form").style.display = "none";
+          document.getElementById("todos").style.display = "block";
+        } else {
+          alert("Failed to fetch todos. Please try again.");
+        }
+      }
+    </script>
+  </body>
+</html>
